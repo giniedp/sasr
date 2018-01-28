@@ -9,12 +9,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/cratonica/trayhost"
-  packages = ["."]
-  revision = "98495206fd960e78f5cdf88bb2b230d968e57261"
-
-[[projects]]
-  branch = "master"
   name = "github.com/getlantern/context"
   packages = ["."]
   revision = "624d99b1798d7c5375ea1d3ca4c5b04d58f7c775"
@@ -110,6 +104,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a3ec0a645da970d3853a2e21fde0eb1d50e0da639cd29483716ed0be5fcd1339"
+  inputs-digest = "be28e76255c49c597100b465265fcdca8d56964b65d052fa965941320599fd79"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -14,11 +13,12 @@ import (
 )
 
 type ServerConfig struct {
-	Host string
-	Port int
-	Cert string
-	Key  string
-	Pass string
+	Host      string
+	Port      int
+	Cert      string
+	Key       string
+	Pass      string
+	Interface string
 }
 
 type ServiceInfo struct {
@@ -56,11 +56,14 @@ func NewConfigFromFile(file string) (ServerConfig, error) {
 }
 
 func StartServer(config ServerConfig) {
-	interfaces := listInterfaces()
+	interfaces := listInterfaces(func(ifi net.Interface) bool {
+		return config.Interface == "" || config.Interface == ifi.Name
+	})
 	if interfaces == nil || len(interfaces) == 0 {
-		log.Fatal("Could not determine host IP addresses")
-		return
+		logFatal("Could not determine host IP addresses")
 	}
+	logInfo("Starting Service at interface: %v", interfaces[0].Name)
+
 	hostname, _ := os.Hostname()
 	serviceName := fmt.Sprintf("SASR Daemon (%s)", hostname)
 	server, err := zeroconf.Register(serviceName, "_http._tcp", "local.", config.Port, []string{
@@ -72,10 +75,9 @@ func StartServer(config ServerConfig) {
 		fmt.Sprintf("ssl=%v", config.Key != "" && config.Cert != ""),
 		fmt.Sprintf("protected=%v", config.Pass != ""),
 		fmt.Sprintf("mac=%v", interfaces[0].HardwareAddr),
-	}, interfaces)
+	}, nil)
 	if err != nil {
-		log.Fatal(err)
-		return
+		logFatal(err.Error())
 	}
 	defer server.Shutdown()
 
@@ -87,14 +89,14 @@ func StartServer(config ServerConfig) {
 	hostWithPort := fmt.Sprintf("%v:%v", config.Host, config.Port)
 
 	if config.Cert != "" && config.Key != "" {
-		log.Printf("[STATUS] Starting TLS server at %v", hostWithPort)
+		logInfo("Starting TLS server at %v", hostWithPort)
 		err = http.ListenAndServeTLS(hostWithPort, config.Cert, config.Key, nil)
 	} else {
-		log.Printf("[STATUS] Starting server at %v", hostWithPort)
+		logInfo("Starting server at %v", hostWithPort)
 		err = http.ListenAndServe(hostWithPort, nil)
 	}
 	if err != nil {
-		log.Fatal(err)
+		logFatal(err.Error())
 	}
 }
 
@@ -106,7 +108,7 @@ func middleware(config ServerConfig, handler func(http.ResponseWriter, *http.Req
 			}
 		}()
 
-		log.Printf("[STATUS] %s %s", r.Method, r.URL.Path)
+		logInfo("%s %s", r.Method, r.URL.Path)
 
 		if r.Method != "POST" {
 			http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -127,7 +129,6 @@ func checkError(err interface{}) {
 }
 
 func handleStatus(w http.ResponseWriter, r *http.Request) {
-
 	w.Write([]byte("Status"))
 }
 
@@ -152,7 +153,7 @@ func handleShutdown(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
-func listInterfaces() []net.Interface {
+func listInterfaces(filter ...func(net.Interface) bool) []net.Interface {
 	var interfaces []net.Interface
 	ifaces, err := net.Interfaces()
 	if err != nil {
@@ -162,9 +163,13 @@ func listInterfaces() []net.Interface {
 		if (ifi.Flags & net.FlagUp) == 0 {
 			continue
 		}
-		if (ifi.Flags & net.FlagMulticast) > 0 {
-			interfaces = append(interfaces, ifi)
+		if (ifi.Flags & net.FlagMulticast) == 0 {
+			continue
 		}
+		if len(filter) == 1 && !filter[0](ifi) {
+			continue
+		}
+		interfaces = append(interfaces, ifi)
 	}
 
 	return interfaces
