@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/getlantern/systray"
-	"github.com/ginie/sasrd"
+	"github.com/giniedp/wakeandshut-daemon"
 )
 
 var iconData = []byte{
